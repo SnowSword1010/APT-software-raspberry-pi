@@ -6,6 +6,11 @@ ImageFile.LOAD_TRUNCATED_IMAGES = True
 
 import psutil
 import time
+import threading
+
+
+exit_event = threading.Event()
+
 ###### CODE FOR DISPLYING IMAGE ######
 
 import sys
@@ -48,7 +53,7 @@ def imageInput(client_socket, BUFFER_SIZE, filename1, filename2):
         try:
             l = client_socket.recv(1024)
             if l == b'next':
-                #client_socket.send(b"data")
+                client_socket.send(b"data")
                 m += 1
                 i = open(filename2, "wb")
                 print(str(m) + "received")
@@ -63,7 +68,21 @@ def imageInput(client_socket, BUFFER_SIZE, filename1, filename2):
             client_socket.close()
     client_socket.close()
 
-def displayAndSwitch(filename1, filename2):
+##### SWITCH AND DISPLAY FUNCTIONS #####
+
+def switch(filename1, filename2):
+
+    # switching the functions and forming an infinite loop
+    while True:
+        if exit_event.is_set():
+            print("reached")
+            break
+        display(filename1)
+        if exit_event.is_set():
+            break
+        display(filename2)
+
+def display(filename1):
     im1 = Image.open(filename1, mode='r')
     width = 1350
     height = 700
@@ -71,7 +90,7 @@ def displayAndSwitch(filename1, filename2):
     im1 = im1.resize((width, height))
     im1_new = ImageOps.fit(im1, (width,height), method=0, bleed=0.0, centering=(0.5,0.5))
     im1_new.show()
-    time.sleep(10)
+    time.sleep(20)
     im1_new.close()
     im1.close()
     # code to kill all displays
@@ -82,52 +101,7 @@ def displayAndSwitch(filename1, filename2):
     except:
         pass
 
-    # switching the functions and forming an infinite loop
-    displayAndSwitch(filename2, filename1)
-
-    #with open(filename1, "wb") as f1:
-    #    while True:
-    #        bytes_read = client_socket.recv(BUFFER_SIZE)
-    #        if not bytes_read:
-    #            break
-    #        f1.write(bytes_read)
-            
-    #with open(filename2, "wb") as f2:
-    #    while True:
-    #        bytes_read = client_socket.recv(BUFFER_SIZE)
-    #        if not bytes_read:
-    #            break
-    #        f2.write(bytes_read)
-
-    #print(filename1)
-    #print(filename2)
-       #im1 = cv2.imread(filename)
-       #cv2.imshow(im1)
-       #cv2.waitKey(0)
-    #im1 = Image.open(filename1, mode='r')
-    #width = 1350
-    #height = 700
-    #im1_new = im1
-    #im1 = im1.resize((width, height))
-    #im1_new = ImageOps.fit(im1, (width,height), method=0, bleed=0.0, centering=(0.5,0.5))
-    #im1_new.show()
-    #showPIL(im1_new)
-    #time.sleep(5)
-    #im1_new.close()
-    #im1.close()
-    #im2 = Image.open(filename2, mode='r')
-    #width = 1350
-    #height = 700
-    #im2_new = im2
-    #im2 = im2.resize((width, height))
-    #im2_new = ImageOps.fit(im2, (width,height), method=0, bleed=0.0, centering=(0.5,0.5))
-    #im2_new.show()
-    #showPIL(im2_new)
-    #time.sleep(15)
-    #im2_new.close()
-    #im2.close()
-
-
+########################################
 
 filename = ""
 im1 = None
@@ -144,53 +118,51 @@ SEPARATOR = "<SEPARATOR>"
 # create server tcp socket
 s = socket.socket()
 s.bind((SERVER_HOST, SERVER_PORT))
+myFlag = False
     
 print("[*] Listening as " + str(SERVER_HOST) + ":" + str(SERVER_PORT))
 s.listen(1)
 while True:
-    try:
-        for proc in psutil.process_iter():
-            if proc.name() == "display":
-                proc.kill()
-    except:
-        pass
-    try:
-        im1_new.close()
-        im2_new.close()
-    except:
-        pass
-    try:
-        im1.close()
-        im2.close()
-    except:
-        pass
-    try:
-        #os.remove(filename1)
-        #os.remove(filename2)
-        pass
-    except:
-        pass
-    
+        
     try:
         client_socket, address = s.accept()
-    
+        try:
+            if(myFlag == True):
+                exit_event.set()
+            else:
+                myFlag = True
+            t1.join()
+            exit_event.clear()
+        except:
+            pass
+
+        try:
+            for proc in psutil.process_iter():
+                if proc.name() == "display":
+                    proc.kill()
+        except:
+            pass
+        try:
+            os.remove(filename1)
+            os.remove(filename2)
+        except:
+            pass
+ 
         with client_socket:
             print('Connected by ', address)
-            received = client_socket.recv(BUFFER_SIZE).decode("utf-8")
+            received = client_socket.recv(BUFFER_SIZE).decode("utf-16")
             shutdown, twoImage, filename1, filesize1, filename2, filesize2 = received.split(SEPARATOR)
-            print(shutdown)
-            print(twoImage)
+            client_socket.send(b'rec')
             if(shutdown == "True"):
-                print("Hey1")
                 os.system("shutdown now -h")
             else:
-                print("Hey2")
                 filename1 = os.path.basename(filename1)
                 filesize1 = int(filesize1)
                 filename2 = os.path.basename(filename2)
                 filesize2 = int(filesize2)
                 imageInput(client_socket, BUFFER_SIZE, filename1, filename2)
-                displayAndSwitch(filename1, filename2)
+                t1 = threading.Thread(target = switch, args = (filename1, filename2, ))
+                t1.start()
     finally:
         client_socket.close()
 
