@@ -13,65 +13,45 @@ import threading
 # This exit event is a check to know whether the thread should be terminated or not
 exit_event = threading.Event()
 
-###### CODE FOR DISPLYING IMAGE | In pillow format ######
-
-import sys
-if sys.version_info == 2: # tkinter library reference to avoid pontential naming conflict with people's programs.
-    import Tkinter
-    tkinter = Tkinter
-else:
-    import tkinter
-
-def showPIL(pillImg):
-    root = tkinter.Tk()
-    w,h = root.winfo_screenwidth(), root.winfo_screenheight()
-    root.overrideredirect(1)
-    root.geometry("%dx%d+0+0" % (w,h))
-    root.focus_set()
-    root.bind("<Escape>", lambda e: (e.widget.withdraw(), e.widget.quit()))
-    canvas = tkinter.Canvas(root, width=w,height=h)
-    canvas.pack()
-    canvas.configure(background='black')
-    imWidth, imHeight = pillImg.size
-    if imWidth > w or imHeight > h:
-        ratio = min(w/imWidth, h/imHeight)
-        imWidth = int(imWidth*ratio)
-        imHeight = int(imHeight*ratio)
-        pillImg = pillImg.resize((imWidth,imHeight), Image.ANTIALIAS)
-    image = ImageTk.PhotoImage(pillImg)
-    imagesprite = canvas.create_image(w/2,h/2,image=image)
-    root.mainloop()
-
-######################################
-
 ##### FUNCTION TO TAKE IMAGE INPUT IN THE VARIABLES filename1 and filename2 #####
 
 def imageInput(client_socket, BUFFER_SIZE, filename1, filename2):
-    # denotes number of images succeffuly inputted
-    m = 0
-    condition = True
-    i = open(filename1, "wb")
-    # this code helps us store both images in buffer
-    while True:
-        if(m >= 2):
-            break
-        try:
-            l = client_socket.recv(1024)
-            if l == b'next':
-                # acknowledging sent data
-                client_socket.send(b"data")
-                m += 1
-                i = open(filename2, "wb")
-                print(str(m) + "received")
+    try:
+        # removing filename1 from previous iteration
+        os.remove(filename1)
+    except:
+        pass
 
-            if l == b'nex':
-                print("exitting")
+    with open(filename1, "wb") as f1:
+        while True:
+            bytes_read = client_socket.recv(1024)
+            if bytes_read == b'n':
                 break
-            if l != b'next' and l != b'':
-                i.write(l)
+            if not bytes_read:
+                break
+            f1.write(bytes_read)
 
-        except:
-            return
+    print("file1 received")
+    client_socket.send(b"recf1")
+
+    try:
+        # removing filename2 from previous iteration
+        os.remove(filename2)
+    except:
+        pass
+
+    with open(filename2, "wb") as f2:
+        while True:
+            bytes_read = client_socket.recv(1024)
+            if bytes_read == b'nex':
+                break
+            if not bytes_read:
+                break
+            f2.write(bytes_read)
+
+    print("file2 received")
+    client_socket.send(b"recf2")
+
     return
 
 ##### SWITCH AND DISPLAY FUNCTIONS #####
@@ -90,7 +70,7 @@ def switch(filename1, filename2):
 
 def display(filename1):
     im1 = Image.open(filename1, mode='r')
-    width = 1350
+    width = 1358
     height = 700
     im1_new = im1
     # resizing the image to fit screen
@@ -112,7 +92,8 @@ def display(filename1):
 
 ########################################
 
-filename = ""
+filename1 = ""
+filenam2 = ""
 im1 = None
 im1_new = None
 
@@ -120,8 +101,8 @@ im1_new = None
 SERVER_HOST = "192.168.29.222"
 SERVER_PORT = 5002
 
-# receive 4096 bytes every line
-BUFFER_SIZE = 4096
+# receive 1024 bytes every line
+BUFFER_SIZE = 1024
 SEPARATOR = "<SEPARATOR>"
 
 # create server tcp socket
@@ -146,7 +127,9 @@ while True:
                 myFlag = True
 
             # joining t1 thread to the main thread
+            print("Closing thread")
             t1.join()
+            print("Closed thread")
             # clearing the exit event to ensure that subsequent connection iamges are displayed
             exit_event.clear()
         except:
@@ -170,12 +153,15 @@ while True:
             print('Connected by ', address)
             # receiving necessary parameters from client
             received = client_socket.recv(BUFFER_SIZE).decode("utf-16")
-            shutdown, twoImage, filename1, filesize1, filename2, filesize2 = received.split(SEPARATOR)
+            shutdown, filename1, filesize1, filename2, filesize2 = received.split(SEPARATOR)
             # acknowledging receieved parameters
             client_socket.send(b'rec')
 
             # checking if the client wants to shut the system down
             if(shutdown == "True"):
+                for image in os.listdir(os.getcwd()):
+                    if(image.endswith('.png') or image.endswith('.jpeg') or image.endswith('.jpg')):
+                        os.remove(image)
                 os.system("shutdown now -h")
             else:
                 # storing filenames and filesizes
@@ -185,6 +171,7 @@ while True:
                 filesize2 = int(filesize2)
                 # gathering image inputs for receieved files
                 imageInput(client_socket, BUFFER_SIZE, filename1, filename2)
+                print("hey")
                 # Defining thread t1 to switch between the two images
                 t1 = threading.Thread(target = switch, args = (filename1, filename2, ))
                 # starting thread t1
