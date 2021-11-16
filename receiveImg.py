@@ -98,7 +98,8 @@ im1 = None
 im1_new = None
 
 # DEVICE IP ADDRESS AND PORT
-SERVER_HOST = "192.168.29.222"
+SERVER_HOST = "192.168.43.222"
+print("IP: " + str(SERVER_HOST))
 SERVER_PORT = 5002
 
 # receive 1024 bytes every line
