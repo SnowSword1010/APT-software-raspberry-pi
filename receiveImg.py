@@ -101,7 +101,7 @@ im1_new = None
 SERVER_HOST = "192.168.43.222"
 print("IP: " + str(SERVER_HOST))
 SERVER_PORT = 5002
-
+time.sleep(3)
 # receive 1024 bytes every line
 BUFFER_SIZE = 1024
 SEPARATOR = "<SEPARATOR>"
